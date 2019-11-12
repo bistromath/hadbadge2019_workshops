@@ -182,6 +182,8 @@ void main(int argc, char **argv) {
 	GFX_REG(GFX_LAYEREN_REG)=GFX_LAYEREN_FB_8BIT|GFX_LAYEREN_FB|GFX_LAYEREN_TILEA;
 
 	int run = 1;
+	int btn_sel = 0;
+	int bw = 0;
 	while(run) {
 		// Render a frame of the fire effect on the framebuffer layer
 		__render_fire();
@@ -190,6 +192,24 @@ void main(int argc, char **argv) {
 		if (MISC_REG(MISC_BTN_REG) & BUTTON_START) {
 			run = 0;
     	}
+
+		if ((MISC_REG(MISC_BTN_REG) & BUTTON_SELECT) && !btn_sel) {
+			if (!bw) {
+				GFX_REG(GFX_LAYEREN_REG) = GFX_LAYEREN_FB_8BIT |
+										   GFX_LAYEREN_FLT_GRAY |
+										   GFX_LAYEREN_FB |
+										   GFX_LAYEREN_TILEA;
+				bw = 1;
+			} else {
+				GFX_REG(GFX_LAYEREN_REG) = GFX_LAYEREN_FB_8BIT |
+										   GFX_LAYEREN_FB |
+										   GFX_LAYEREN_TILEA;
+				bw = 0;
+			}
+			btn_sel = 1;
+		} else {
+			btn_sel = 0;
+		}
 	}
 
 	printf("fire app done. Bye!\n");

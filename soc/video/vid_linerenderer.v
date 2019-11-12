@@ -110,6 +110,7 @@ module vid_linerenderer (
 reg [23:0] fb_addr;
 reg [15:0] pitch;
 reg [3:0] layer_en;
+reg comb_flt_gray;
 
 reg [23:0] dma_start_addr;
 reg dma_run;
@@ -515,6 +516,7 @@ reg [31:0] alphamixer_in_b;
 reg [7:0] alphamixer_rate;
 wire [31:0] alphamixer_out_cur;
 reg [31:0] alphamixer_out;
+reg [28:0] alphamixer_gray_out;
 
 video_alphamixer mixer(
 	.in_a(pal_data),
@@ -607,7 +609,8 @@ always @(*) begin
 	end
 end
 
-assign vid_data_out = alphamixer_out[23:0];
+//Output the pixel color or the filtered color depending on the filter selection
+assign vid_data_out = comb_flt_gray ? alphamixer_gray_out[23:0] : alphamixer_out[23:0];
 reg in_render_vbl;
 
 always @(posedge clk) begin
@@ -636,7 +639,9 @@ always @(posedge clk) begin
 		tileb_rowinc_x <= 0;
 		tileb_rowinc_y <= (1<<6);
 		fb_is_8bit <= 0;
+		comb_flt_gray <= 0;
 		alphamixer_out <= 0;
+		alphamixer_gray_out <= 0;
 		bgnd_color <= 0;
 		sprite_yoff <= 64;
 		sprite_xoff <= 64;
@@ -653,6 +658,7 @@ always @(posedge clk) begin
 				fb_pal_offset=din_muxed[24:16];
 			end else if (addr_muxed[5:2]==REG_SEL_LAYER_EN) begin
 				layer_en <= din_muxed[3:0];
+				comb_flt_gray <= din_muxed[8];
 				fb_is_8bit <= din_muxed[16];
 			end else if (addr_muxed[5:2]==REG_SEL_TILEA_OFF) begin
 				tilea_xoff <= din_muxed[15:0];
@@ -694,6 +700,13 @@ always @(posedge clk) begin
 		dma_do_read <= 0;
 		vid_wen <= 0;
 
+		//Write alphamixer output independent of what row we are on, this decreases the combinatorial path length.
+		//Also generate the gray filter output at the same time so we can easily switch it on when needed.
+		alphamixer_out <= alphamixer_out_cur;
+		alphamixer_gray_out <= {alphamixer_out_cur[23:16] | alphamixer_out_cur[15:8] | alphamixer_out_cur[7:0],
+								alphamixer_out_cur[23:16] | alphamixer_out_cur[15:8] | alphamixer_out_cur[7:0],
+								alphamixer_out_cur[23:16] | alphamixer_out_cur[15:8] | alphamixer_out_cur[7:0]};
+
 		//Line renderer proper statemachine.
 		if (write_vid_addr[19:9]>=320) begin
 			//We're finished with this frame. Wait until the video generator starts drawing the next frame.
@@ -728,7 +741,6 @@ always @(posedge clk) begin
 					dma_do_read <= 1;
 				end
 
-				alphamixer_out <= alphamixer_out_cur;
 				cycle <= cycle + 1;
 				if (cycle==0) begin
 					if (fb_is_8bit) begin

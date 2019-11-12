@@ -251,6 +251,8 @@ fill the palette memory), the fields are
 #define GFX_LAYEREN_TILEB (1<<2)
 /** Sprite enable register. If 1, the sprite layer is displayed. */
 #define GFX_LAYEREN_SPR (1<<3)
+/** GRAY combinatorial layer filter enable. */
+#define GFX_LAYEREN_FLT_GRAY (1<<8)
 /** Set this to 1 to make the framebuffer memory contain 8-bit values,
     making for a 256-color framebuffer. If 0, the framebuffer memory
     is only 4-bit, giving an 16-bit bitmap. */
