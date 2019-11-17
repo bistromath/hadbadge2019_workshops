@@ -15,7 +15,7 @@
 
 /// CHANGEME!!!!!
 // No, really.  If you want to hear other songs, change me.
-#define CASTLEVANIA
+#define STARMAN
 
 #ifdef MARIO
 // mario

@@ -137,6 +137,22 @@ static inline void __create_pipe(int x, int h) {
 	}
 }
 
+volatile uint32_t *IRDA_DATA_REG = (volatile uint32_t *) 0x10000010;
+uint8_t last_button_state;
+
+int check_for_irda_button() {
+    uint32_t irda_data = *IRDA_DATA_REG;
+
+    while((irda_data & (1<<31)) == 0) {
+        last_button_state = irda_data & 0xFF;
+        irda_data = *IRDA_DATA_REG;
+    }
+
+    int my_buttons = MISC_REG(MISC_BTN_REG);
+
+    return last_button_state | (my_buttons&0x7F);
+}
+
 /**
  * Check for collision with a pipe with true screen x coordinate and height value
  * Sadly units do not match. If I find time to fix it I will.
@@ -207,7 +223,9 @@ void main(int argc, char **argv) {
 		MISC_REG(MISC_LED_REG)=(i<<i);
 		__INEFFICIENT_delay(100);
 	}
-	
+
+    last_button_state = 0;
+    MISC_REG(MISC_GPEXT_W2C_REG) = 1<<30;
 
 	//Set up the framebuffer address.
 	GFX_REG(GFX_FBADDR_REG)=((uint32_t)fbmem)&0xFFFFFF;
@@ -296,6 +314,7 @@ void main(int argc, char **argv) {
 		int x4 = (((m_pipe_4_x << 10) - (int)dx) & 0xFFFF) >> 6;
 
 		//Periodically update user y position and check for jumping
+        int button = check_for_irda_button();
 		if ((m_score % 300) == 0) {
 			m_player_y += m_player_velocity;
 
@@ -306,7 +325,7 @@ void main(int argc, char **argv) {
 			}
 
 			//Jump when user presses button
-			if (MISC_REG(MISC_BTN_REG)) {
+			if (button) {
 				m_player_velocity = 0;
 				m_player_y += FLAPPY_JUMP;
 				__sprite_set(0, FLAPPY_PLAYER_X*16, m_player_y, 32, 32, FLAPPY_PLAYER_JUMP_INDEX, 0);	
@@ -367,7 +386,7 @@ void main(int argc, char **argv) {
 		//Print score at 0,0
 		//NOTE: this seems to be a *very* slow operation. Adding a second fprintf will have a noticeable
 		//slowdown effect. Removing this fprintf will put the game into ludicrous speed mode. Need to fix!
-		fprintf(console, "\0330X\0330Y%dm\03324XFLAPPY", (m_score >> 10)); 
+		fprintf(console, "\0330X\0330Y%dm\03324X %x", (m_score >> 10), button); 
 
 		//Flappy score increases with distance which is simply a function of time
 		m_score++;

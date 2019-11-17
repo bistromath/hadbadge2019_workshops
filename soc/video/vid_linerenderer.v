@@ -284,6 +284,8 @@ always @(posedge clk) begin
 	end
 end
 
+reg [7:0] gamma;
+
 always @(*) begin
 	cpu_sel_tilemem = 0;
 	cpu_sel_tilemap_a = 0;
@@ -293,6 +295,7 @@ always @(*) begin
 	cpu_sel_sprites = 0;
 	cpu_sel_copper = 0;
 	dout = 0;
+    //Readback registers
 	if (addr_muxed[17:13]=='h0) begin
 		cpu_sel_regs = 1;
 		if (addr_muxed[5:2]==REG_SEL_FB_ADDR) begin
@@ -300,7 +303,7 @@ always @(*) begin
 		end else if (addr_muxed[5:2]==REG_SEL_FB_PITCH) begin
 			dout = {7'h0, fb_pal_offset, pitch};
 		end else if (addr_muxed[5:2]==REG_SEL_LAYER_EN) begin
-			dout = {15'h0, fb_is_8bit, 12'h0,  layer_en};
+			dout = {gamma, 7'h0, fb_is_8bit, 12'h0,  layer_en};
 		end else if (addr_muxed[5:2]==REG_SEL_TILEA_OFF) begin
 			dout = {tilea_yoff, tilea_xoff};
 		end else if (addr_muxed[5:2]==REG_SEL_TILEB_OFF) begin
@@ -516,7 +519,6 @@ reg [31:0] alphamixer_in_b;
 reg [7:0] alphamixer_rate;
 wire [31:0] alphamixer_out_cur;
 reg [31:0] alphamixer_out;
-reg [28:0] alphamixer_gray_out;
 
 video_alphamixer mixer(
 	.in_a(pal_data),
@@ -609,8 +611,13 @@ always @(*) begin
 	end
 end
 
-//Output the pixel color or the filtered color depending on the filter selection
-assign vid_data_out = comb_flt_gray ? alphamixer_gray_out[23:0] : alphamixer_out[23:0];
+reg [23:0] gamma_in;
+wire [23:0] gamma_out;
+reg [10:0] luminance;
+
+assign gamma_out = comb_flt_gray ? {luminance[10:3], luminance[10:3], luminance[10:3]} : alphamixer_out[23:0];
+assign vid_data_out = gamma_out;
+
 reg in_render_vbl;
 
 always @(posedge clk) begin
@@ -641,12 +648,14 @@ always @(posedge clk) begin
 		fb_is_8bit <= 0;
 		comb_flt_gray <= 0;
 		alphamixer_out <= 0;
-		alphamixer_gray_out <= 0;
 		bgnd_color <= 0;
 		sprite_yoff <= 64;
 		sprite_xoff <= 64;
 		vblctr <= 0;
 		in_render_vbl <= 0;
+        gamma <= 128;
+        luminance <= 0;
+        gamma_in <= 0;
 	end else begin
 		/* CPU interface */
 		ready_delayed <= ((wstrb!=0) | ren);
@@ -660,6 +669,7 @@ always @(posedge clk) begin
 				layer_en <= din_muxed[3:0];
 				comb_flt_gray <= din_muxed[8];
 				fb_is_8bit <= din_muxed[16];
+                gamma <= din_muxed[31:24];
 			end else if (addr_muxed[5:2]==REG_SEL_TILEA_OFF) begin
 				tilea_xoff <= din_muxed[15:0];
 				tilea_yoff <= din_muxed[31:16];
@@ -701,11 +711,13 @@ always @(posedge clk) begin
 		vid_wen <= 0;
 
 		//Write alphamixer output independent of what row we are on, this decreases the combinatorial path length.
-		//Also generate the gray filter output at the same time so we can easily switch it on when needed.
 		alphamixer_out <= alphamixer_out_cur;
-		alphamixer_gray_out <= {alphamixer_out_cur[23:16] | alphamixer_out_cur[15:8] | alphamixer_out_cur[7:0],
-								alphamixer_out_cur[23:16] | alphamixer_out_cur[15:8] | alphamixer_out_cur[7:0],
-								alphamixer_out_cur[23:16] | alphamixer_out_cur[15:8] | alphamixer_out_cur[7:0]};
+
+        //a horrible rough approximation for luminance would be:
+        //0.25R + 0.5G + 0.125B
+        //i.e., (2R + 4G + 1B) / 8
+        luminance <= {alphamixer_out_cur[7:0], 1'b0} + {alphamixer_out_cur[15:8], 2'b0} + alphamixer_out_cur[23:16];
+        //gamma_out <= gamma_in;
 
 		//Line renderer proper statemachine.
 		if (write_vid_addr[19:9]>=320) begin

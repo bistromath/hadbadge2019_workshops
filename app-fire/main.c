@@ -174,7 +174,7 @@ void main(int argc, char **argv) {
 	fprintf(f, "hold start to exit");
 	fprintf(f, "\0337X"); //set Xpos to 5
 	fprintf(f, "\0338Y"); //set Ypos to 8
-	fprintf(f, "Welcome the fire!"); // Print a message
+	fprintf(f, "BUTTS!"); // Print a message
 
 	// The user can still see nothing of this graphics goodness, so let's
 	// re-enable the framebuffer and tile layer A (the default layer for the

@@ -28,6 +28,7 @@
 
 
 #include "uart.h"
+#include "uart_irda.h"
 #include "../fatfs/source/ff.h"
 #include "../loadapp.h"
 #include "console_out.h"
@@ -59,11 +60,15 @@ int remap_fatfs_errors(FRESULT f) {
 #define FD_TYPE_USBUART 1
 #define FD_TYPE_CONSOLE 2
 #define FD_TYPE_FATFS 3
+#define FD_TYPE_IRDAUART 4
 
 #define FD_FLAG_OPEN (1<<0)
 #define FD_FLAG_WRITABLE (1<<1)
 
 #define MAX_FD 32
+
+extern volatile uint32_t MISC[];
+#define MISC_REG(i) MISC[(i)/4]
 
 typedef struct {
 	short flags;
@@ -129,6 +134,11 @@ int _open(const char *name, int flags, int mode) {
 		fd_entry[i].type=FD_TYPE_DBGUART;
 		fd_entry[i].flags=FD_FLAG_OPEN;
 		if ((flags+1) & (O_WRONLY+1)) fd_entry[i].flags|=FD_FLAG_WRITABLE;
+	} else if (!strcmp(name, "/dev/ttyirda")){
+		fd_entry[i].type=FD_TYPE_IRDAUART;
+		fd_entry[i].flags=FD_FLAG_OPEN;
+		if ((flags+1) & (O_WRONLY+1)) fd_entry[i].flags|=FD_FLAG_WRITABLE;
+        MISC_REG(MISC_GPEXT_W2C_REG) = (1<<30); //enable IRDA hw
 	} else if (!strcmp(name, "/dev/console")){
 		fd_entry[i].type=FD_TYPE_CONSOLE;
 		fd_entry[i].flags=FD_FLAG_OPEN;
@@ -193,6 +203,9 @@ ssize_t _write(int file, const void *ptr, size_t len) {
 	if (fd_entry[file].type==FD_TYPE_DBGUART) {
 		uart_write((const char*)ptr, len);
 		return len;
+    } else if (fd_entry[file].type==FD_TYPE_IRDAUART) {
+        uart_irda_write((const char*)ptr, len);
+        return len;
 	} else if (fd_entry[file].type==FD_TYPE_USBUART) {
 		return tud_cdc_write(ptr, len);
 	} else if (fd_entry[file].type==FD_TYPE_CONSOLE) {
@@ -215,6 +228,10 @@ int _fstat(int file, struct stat *st) {
 
 int _close(int file) {
 	CHECK_IF_VALID_FD(file);
+    if(fd_entry[file].type==FD_TYPE_IRDAUART) {
+        //disable IRDA device (kind of overkill)
+        MISC_REG(MISC_GPEXT_W2S_REG) = (1<<30);
+    }
 	if (fd_entry[file].type==FD_TYPE_FATFS) {
 		f_close(fd_entry[file].fatfcb);
 		free(fd_entry[file].fatfcb);
@@ -264,6 +281,7 @@ int _execve(const char *name, char *const argv[], char *const env[]) {
 void exit_to_ipl(int exit_status); //defined in crt0.S
 void _exit(int exit_status) {
 	exit_to_ipl(exit_status);
+    __builtin_unreachable();
 }
 
 //Nein.
@@ -294,6 +312,7 @@ int _gettimeofday(struct timeval *tp, void *tzp) {
 int _isatty(int file) {
 	CHECK_IF_VALID_FD(file);
 	if (fd_entry[file].type==FD_TYPE_DBGUART) return 1;
+	if (fd_entry[file].type==FD_TYPE_IRDAUART) return 1;
 	if (fd_entry[file].type==FD_TYPE_USBUART) return 1;
 	if (fd_entry[file].type==FD_TYPE_CONSOLE) return 1;
 	return 0;

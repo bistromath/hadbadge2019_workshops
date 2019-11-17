@@ -1,5 +1,5 @@
 TARGET := libgloss.a
-OBJS := cpu_start.o crt0.o custom_ops.o newlib_stubs.o uart.o syscalls.o
+OBJS := cpu_start.o crt0.o custom_ops.o newlib_stubs.o uart.o uart_irda.o syscalls.o
 OBJS += newlib_extra.o console_out.o mach_interrupt_asm.o
 
 $(TARGET): $(OBJS)
