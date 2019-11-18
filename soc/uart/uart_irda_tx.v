@@ -42,12 +42,12 @@ module uart_irda_tx #(
 	output reg  ack,
 	input  wire [DIV_WIDTH-1:0] div,	// div - 2
 	input  wire clk,
-	input  wire rst
+	input  wire rst,
+    output reg active
 );
 
 	// Signals
 	wire go, done;
-	reg  active;
 
 	reg  ce_bit_pre;
 	wire ce_bit;

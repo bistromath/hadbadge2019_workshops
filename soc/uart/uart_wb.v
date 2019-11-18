@@ -99,6 +99,8 @@ module uart_wb #(
 	reg         ub_wr_div;
 	reg         ub_ack;
 
+    wire tx_active;
+
 
 	// TX Core
 	// -------
@@ -114,7 +116,8 @@ module uart_wb #(
 				.tx(uart_tx),
 				.div(uart_div),
 				.clk(clk),
-				.rst(rst)
+				.rst(rst),
+                .active(tx_active)
 			);
 		else
 			uart_tx #(
@@ -153,7 +156,6 @@ module uart_wb #(
 	assign uart_tx_valid = ~utf_empty;
 	assign utf_rden      =  uart_tx_ack;
 
-
 	// RX Core
 	// -------
 
@@ -168,7 +170,7 @@ module uart_wb #(
 				.stb(uart_rx_stb),
 				.div(uart_div),
 				.clk(clk),
-				.rst(rst)
+				.rst(rst|tx_active)
 			);
 		else
 			uart_rx #(
